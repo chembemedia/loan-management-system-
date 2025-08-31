@@ -1,0 +1,664 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Chembe Media Investments — Loan Management (Single-file)</title>
+
+<!-- External libs (CDN) -->
+<script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<style>
+  :root{
+    --brand: #0a5c36; /* Chembe brand color */
+    --accent: #0f8a53;
+    --bg: #f6fbf8;
+    --card: #ffffff;
+    --muted: #eaf6ef;
+    --danger: #e44a4a;
+    --radius: 12px;
+    --shadow: 0 10px 30px rgba(10,92,54,0.06);
+    font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;padding:28px;background:linear-gradient(180deg,var(--bg),#ffffff);
+    color:#07321e;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  header{display:flex;gap:12px;align-items:center;margin-bottom:20px}
+  .logo{width:64px;height:64px;border-radius:12px;background:var(--brand);color:white;display:grid;place-items:center;font-weight:800;font-size:20px;box-shadow:var(--shadow)}
+  h1{margin:0;font-size:20px}
+  p.lead{margin:0;color:#234e36;opacity:.9}
+
+  .layout{display:grid;grid-template-columns:360px 1fr;gap:20px;align-items:start}
+  @media (max-width:900px){ .layout{grid-template-columns:1fr} }
+
+  .card{background:var(--card);padding:16px;border-radius:var(--radius);box-shadow:var(--shadow)}
+  label{display:block;font-size:13px;color:#0a341f;margin-bottom:6px}
+  input[type="text"], input[type="email"], input[type="number"], select, textarea{
+    width:100%;padding:10px;border-radius:8px;border:1px solid #e6f0ea;background:white;font-size:14px;
+  }
+  textarea{resize:vertical}
+  .row{display:flex;gap:8px}
+  .row .col{flex:1}
+
+  button{
+    background:var(--brand);color:white;padding:10px 12px;border-radius:8px;border:0;font-weight:700;cursor:pointer;
+  }
+  button.ghost{background:#f0f3f1;color:var(--brand);border:1px solid rgba(10,92,54,0.06)}
+  button.warn{background:var(--danger)}
+  .small{font-size:13px;color:#2b5b42}
+
+  table{width:100%;border-collapse:collapse;margin-top:8px;border-radius:10px;overflow:hidden}
+  th,td{padding:10px;text-align:left;border-bottom:1px solid #eef6ef;font-size:13px}
+  thead{background:linear-gradient(90deg,var(--brand),var(--accent));color:white}
+  tbody tr:hover{background:#fbfffb}
+  .status{padding:6px 8px;border-radius:999px;color:white;font-weight:700;font-size:12px;display:inline-block}
+  .status.pending{background:#f39c12}
+  .status.approved{background:var(--brand)}
+  .status.denied{background:#b73a3a}
+  .status.repaid{background:#2b8a66}
+
+  .toolbar{display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
+  .search{flex:1;padding:10px;border-radius:8px;border:1px solid #e8f3ec}
+
+  .modal-back{position:fixed;inset:0;background:rgba(8,20,12,0.45);display:none;align-items:center;justify-content:center;padding:20px}
+  .modal{background:white;border-radius:12px;max-width:980px;width:100%;box-shadow:0 24px 60px rgba(10,92,54,0.16);padding:16px}
+  .modal .actions{display:flex;gap:8px;align-items:center}
+
+  footer{margin-top:18px;color:#133623;font-size:13px}
+  .tiny{font-size:12px;color:#245134}
+  a.link{color:var(--brand);text-decoration:none;font-weight:700}
+  .pill{display:inline-block;padding:6px 10px;border-radius:999px;background:#eef7f1;color:var(--brand);font-weight:700}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">CM</div>
+  <div>
+    <h1>Chembe Media Investments — Loan Management</h1>
+    <p class="lead">Zambia — Manage borrowers, loans, repayments & agreements (client-only demo)</p>
+  </div>
+</header>
+
+<div class="layout">
+  <!-- Left panel: new loan + tools -->
+  <div class="card" id="left">
+    <h3 style="margin-top:0">New Loan Application</h3>
+    <form id="loanForm" autocomplete="off">
+      <label>Borrower name</label>
+      <input id="borrowerName" type="text" placeholder="Full name" required />
+
+      <label style="margin-top:8px">Email</label>
+      <input id="borrowerEmail" type="email" placeholder="name@example.com" />
+
+      <div class="row" style="margin-top:8px">
+        <div class="col">
+          <label>Principal (ZMW)</label>
+          <input id="principal" type="number" min="0" step="0.01" placeholder="e.g. 5000" required />
+        </div>
+        <div class="col">
+          <label>Interest % (annual)</label>
+          <input id="interestRate" type="number" min="0" step="0.01" value="18" />
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:8px">
+        <div class="col">
+          <label>Term (months)</label>
+          <input id="termMonths" type="number" min="1" max="360" value="12" />
+        </div>
+        <div class="col">
+          <label>Payment frequency</label>
+          <select id="frequency">
+            <option value="12">Monthly</option>
+            <option value="52">Weekly</option>
+            <option value="4">Quarterly</option>
+          </select>
+        </div>
+      </div>
+
+      <label style="margin-top:8px">Notes</label>
+      <textarea id="notes" rows="2" placeholder="Collateral, purpose..."></textarea>
+
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <button type="submit">Create Loan</button>
+        <button type="button" class="ghost" id="clearForm">Clear</button>
+      </div>
+      <small class="small" style="display:block;margin-top:8px">Loans are saved locally in your browser (demo).</small>
+    </form>
+
+    <hr style="margin:12px 0;border:none;border-top:1px solid #eef7ec" />
+
+    <div>
+      <h4 style="margin:0 0 8px 0">Quick Tools</h4>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button id="importSample" class="ghost">Import sample</button>
+        <button id="exportCSV" class="ghost">Export CSV</button>
+        <button id="importCSVBtn" class="ghost">Import CSV</button>
+        <button id="clearAll" class="warn">Clear all</button>
+      </div>
+      <input id="csvFile" type="file" accept=".csv" style="display:none;margin-top:8px" />
+    </div>
+  </div>
+
+  <!-- Right panel: loans table -->
+  <div>
+    <div class="card">
+      <div class="toolbar">
+        <input id="searchInput" class="search" placeholder="Search borrower, email, notes..." />
+        <select id="filterStatus">
+          <option value="all">All statuses</option>
+          <option value="pending">Pending</option>
+          <option value="approved">Approved</option>
+          <option value="denied">Denied</option>
+          <option value="repaid">Repaid</option>
+        </select>
+        <select id="sortBy">
+          <option value="createdDesc">Newest</option>
+          <option value="createdAsc">Oldest</option>
+          <option value="amountDesc">Amount (high → low)</option>
+          <option value="amountAsc">Amount (low → high)</option>
+        </select>
+        <button id="newLoanBtn" class="ghost">New</button>
+      </div>
+
+      <table id="loansTable" aria-live="polite">
+        <thead>
+          <tr>
+            <th>Borrower</th>
+            <th>Amount (ZMW)</th>
+            <th>Rate %</th>
+            <th>Term</th>
+            <th>Payment</th>
+            <th>Status</th>
+            <th style="width:200px">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="loansTbody">
+          <!-- filled by JS -->
+        </tbody>
+      </table>
+    </div>
+
+    <footer style="margin-top:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+        <div class="tiny">Chembe Media Investments — Demo • Zambia</div>
+        <div class="tiny">Data stored locally (localStorage)</div>
+      </div>
+    </footer>
+  </div>
+</div>
+
+<!-- modal -->
+<div class="modal-back" id="modalBack">
+  <div class="modal" id="modal" role="dialog" aria-modal="true">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+      <h3 id="modalTitle" style="margin:0">Loan details</h3>
+      <div style="flex:1"></div>
+      <div class="actions">
+        <button id="modalClose" class="ghost">Close</button>
+      </div>
+    </div>
+    <div id="modalContent"></div>
+  </div>
+</div>
+
+<script>
+/*
+  Chembe Media Investments — Single-file Loan Management System
+  - Persists to localStorage under key "chembe_loans_v2"
+  - Features: create/edit/delete loans, amortization schedule, repayments, CSV import/export, PDF agreement (jsPDF), sample import
+  - Color theme uses #0a5c36
+*/
+
+// Utilities
+const $ = sel => document.querySelector(sel);
+const KEY = 'chembe_loans_v2';
+
+function uid(prefix='L'){
+  return prefix + Date.now().toString(36) + Math.floor(Math.random()*999).toString(36);
+}
+function fmt(v){ return Number(v).toLocaleString(undefined,{maximumFractionDigits:2}); }
+function today(){ return new Date().toISOString().slice(0,10); }
+function cap(s){ return s ? s[0].toUpperCase() + s.slice(1) : ''; }
+function escapeHtml(text){ if(!text) return ''; return String(text).replace(/[&<>"']/g, (m)=> ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+
+// Payment calculations
+function calculatePayment(principal, annualRatePercent, totalMonths, frequency){
+  principal = Number(principal) || 0;
+  const paymentsPerYear = Number(frequency) || 12;
+  const numberPayments = Math.max(1, Math.round(totalMonths * (paymentsPerYear / 12)));
+  const r = (annualRatePercent/100) / paymentsPerYear;
+  if(r === 0) return +(principal/numberPayments).toFixed(2);
+  const payment = principal * (r / (1 - Math.pow(1 + r, -numberPayments)));
+  return +payment.toFixed(2);
+}
+function amortizationSchedule(principal, annualRatePercent, totalMonths, frequency){
+  const paymentsPerYear = Number(frequency) || 12;
+  const numberPayments = Math.max(1, Math.round(totalMonths * (paymentsPerYear / 12)));
+  const r = (annualRatePercent/100) / paymentsPerYear;
+  let balance = principal;
+  const payment = calculatePayment(principal, annualRatePercent, totalMonths, frequency);
+  const schedule = [];
+  for(let n=1;n<=numberPayments;n++){
+    const interest = +(balance * r).toFixed(2);
+    const principalPaid = +(Math.min(balance, payment - interest)).toFixed(2);
+    const actualPayment = +(interest + principalPaid).toFixed(2);
+    balance = +(balance - principalPaid).toFixed(2);
+    schedule.push({installment: n, payment: actualPayment, principalPaid, interest, balance: balance<0.01?0:balance, dueDate: today()});
+    if(balance <= 0.001) break;
+  }
+  return schedule;
+}
+
+// Storage helpers
+function loadLoans(){
+  try{
+    const raw = localStorage.getItem(KEY);
+    if(!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  }catch(e){
+    console.error('load error', e);
+    return [];
+  }
+}
+function saveLoans(loans){
+  localStorage.setItem(KEY, JSON.stringify(loans));
+}
+
+// App state
+let loans = loadLoans();
+
+// DOM refs
+const loanForm = $('#loanForm');
+const loansTbody = $('#loansTbody');
+const searchInput = $('#searchInput');
+const filterStatus = $('#filterStatus');
+const sortBy = $('#sortBy');
+const importSampleBtn = $('#importSample');
+const exportCSVBtn = $('#exportCSV');
+const importCSVBtn = $('#importCSVBtn');
+const csvFileInput = $('#csvFile');
+const clearAllBtn = $('#clearAll');
+const clearFormBtn = $('#clearForm');
+const modalBack = $('#modalBack');
+const modalContent = $('#modalContent');
+const modalTitle = $('#modalTitle');
+const modalClose = $('#modalClose');
+const newLoanBtn = $('#newLoanBtn');
+
+// Normalize loan object
+function normalizeLoan(raw){
+  return {
+    id: raw.id || uid(),
+    borrowerName: raw.borrowerName || '',
+    borrowerEmail: raw.borrowerEmail || '',
+    principal: Number(raw.principal) || 0,
+    interestRate: Number(raw.interestRate) || 0,
+    termMonths: Number(raw.termMonths) || 0,
+    frequency: Number(raw.frequency) || 12,
+    notes: raw.notes || '',
+    status: raw.status || 'pending', // pending | approved | denied | repaid
+    createdAt: raw.createdAt || (new Date()).toISOString(),
+    repayments: Array.isArray(raw.repayments) ? raw.repayments.map(r => ({ id: r.id || uid('R'), amount: Number(r.amount)||0, date: r.date || today(), method: r.method||'manual' })) : [],
+  };
+}
+
+// Render table
+function renderTable(){
+  const q = (searchInput.value || '').trim().toLowerCase();
+  const statusFilter = filterStatus.value;
+  const sortOption = sortBy.value;
+  let items = loans.slice();
+
+  if(statusFilter !== 'all'){
+    items = items.filter(l => l.status === statusFilter);
+  }
+  if(q){
+    items = items.filter(l =>
+      (l.borrowerName||'').toLowerCase().includes(q) ||
+      (l.borrowerEmail||'').toLowerCase().includes(q) ||
+      (l.notes||'').toLowerCase().includes(q)
+    );
+  }
+
+  items.sort((a,b) => {
+    switch(sortOption){
+      case 'createdAsc': return new Date(a.createdAt) - new Date(b.createdAt);
+      case 'createdDesc': return new Date(b.createdAt) - new Date(a.createdAt);
+      case 'amountAsc': return a.principal - b.principal;
+      case 'amountDesc': return b.principal - a.principal;
+      default: return 0;
+    }
+  });
+
+  loansTbody.innerHTML = '';
+  if(items.length === 0){
+    loansTbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:26px;color:#2b5b42">No loans found — add a loan to get started.</td></tr>';
+    return;
+  }
+
+  for(const loan of items){
+    const payment = calculatePayment(loan.principal, loan.interestRate, loan.termMonths, loan.frequency);
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>
+        <div style="font-weight:700">${escapeHtml(loan.borrowerName)}</div>
+        <div class="small">${escapeHtml(loan.borrowerEmail || '')}</div>
+      </td>
+      <td>ZMW ${fmt(loan.principal)}</td>
+      <td>${fmt(loan.interestRate)}%</td>
+      <td>${loan.termMonths} mo</td>
+      <td>ZMW ${fmt(payment)}</td>
+      <td><span class="status ${loan.status}">${cap(loan.status)}</span></td>
+      <td style="white-space:nowrap">
+        <button class="ghost" data-action="view" data-id="${loan.id}">View</button>
+        ${loan.status === 'pending' ? `<button data-action="approve" data-id="${loan.id}">Approve</button>` : ''}
+        ${loan.status === 'approved' ? `<button class="ghost" data-action="repay" data-id="${loan.id}">Repay</button>` : ''}
+        <button class="ghost" data-action="pdf" data-id="${loan.id}">PDF</button>
+        <button class="warn" data-action="delete" data-id="${loan.id}">Delete</button>
+      </td>
+    `;
+    loansTbody.appendChild(tr);
+  }
+}
+
+// Create loan
+loanForm.addEventListener('submit', (e) => {
+  e.preventDefault();
+  const data = {
+    borrowerName: $('#borrowerName').value.trim(),
+    borrowerEmail: $('#borrowerEmail').value.trim(),
+    principal: Number($('#principal').value),
+    interestRate: Number($('#interestRate').value),
+    termMonths: Number($('#termMonths').value),
+    frequency: Number($('#frequency').value),
+    notes: $('#notes').value.trim(),
+    status: 'pending',
+    createdAt: (new Date()).toISOString(),
+    repayments: []
+  };
+  if(!data.borrowerName){ alert('Please enter borrower name'); return; }
+  if(!(data.principal > 0)){ alert('Principal must be greater than zero'); return; }
+  if(!(data.termMonths > 0)){ alert('Term must be at least 1 month'); return; }
+
+  loans.unshift(normalizeLoan(data));
+  saveLoans(loans);
+  renderTable();
+  loanForm.reset();
+  $('#interestRate').value = 18;
+  $('#termMonths').value = 12;
+  alert('Loan saved (pending).');
+});
+
+// Clear form
+clearFormBtn.addEventListener('click', ()=> loanForm.reset());
+
+// Delegated table actions
+loansTbody.addEventListener('click', (e) => {
+  const btn = e.target.closest('button');
+  if(!btn) return;
+  const action = btn.getAttribute('data-action');
+  const id = btn.getAttribute('data-id');
+  const loan = loans.find(l => l.id === id);
+  if(!loan) return;
+
+  if(action === 'view'){
+    openLoanModal(loan);
+  } else if(action === 'approve'){
+    if(confirm('Approve and disburse this loan?')){ loan.status = 'approved'; saveLoans(loans); renderTable(); alert('Loan approved.'); }
+  } else if(action === 'repay'){
+    openRepaymentPrompt(loan);
+  } else if(action === 'pdf'){
+    generatePDF(loan);
+  } else if(action === 'delete'){
+    if(confirm('Delete this loan permanently?')){ loans = loans.filter(l => l.id !== id); saveLoans(loans); renderTable(); }
+  }
+});
+
+// Modal helpers
+function openLoanModal(loan){
+  modalTitle.textContent = `Loan — ${loan.borrowerName}`;
+  modalContent.innerHTML = generateLoanDetailsHtml(loan);
+  modalBack.style.display = 'flex';
+  attachModalHandlers(loan);
+}
+$('#modalClose').addEventListener('click', ()=> modalBack.style.display = 'none');
+modalBack.addEventListener('click', (e)=> { if(e.target === modalBack) modalBack.style.display = 'none'; });
+
+function generateLoanDetailsHtml(loan){
+  const payment = calculatePayment(loan.principal, loan.interestRate, loan.termMonths, loan.frequency);
+  const schedule = amortizationSchedule(loan.principal, loan.interestRate, loan.termMonths, loan.frequency);
+  const paid = loan.repayments.reduce((s,r)=>s+Number(r.amount),0);
+  const balance = Math.max(0, loan.principal - paid);
+  return `
+    <div style="display:flex;gap:12px">
+      <div style="flex:1">
+        <div style="margin-bottom:8px"><strong>Borrower:</strong> ${escapeHtml(loan.borrowerName)} ${loan.borrowerEmail?`<div class="small">${escapeHtml(loan.borrowerEmail)}</div>`:''}</div>
+        <div style="margin-bottom:6px"><strong>Principal:</strong> ZMW ${fmt(loan.principal)}</div>
+        <div style="margin-bottom:6px"><strong>Interest (annual):</strong> ${fmt(loan.interestRate)}%</div>
+        <div style="margin-bottom:6px"><strong>Term:</strong> ${loan.termMonths} months</div>
+        <div style="margin-bottom:6px"><strong>Frequency:</strong> ${loan.frequency===12?'Monthly':loan.frequency===52?'Weekly':'Other'}</div>
+        <div style="margin-bottom:6px"><strong>Payment:</strong> ZMW ${fmt(payment)} (${schedule.length} installments)</div>
+        <div style="margin-bottom:6px"><strong>Status:</strong> <span class="status ${loan.status}">${cap(loan.status)}</span></div>
+        <div style="margin-bottom:6px"><strong>Outstanding balance:</strong> ZMW ${fmt(balance)}</div>
+        <div style="margin-bottom:6px"><strong>Notes:</strong> ${escapeHtml(loan.notes)}</div>
+      </div>
+      <div style="width:360px">
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+          ${loan.status === 'approved' ? `<button id="modalAddRepayment" data-id="${loan.id}" class="ghost">Add Repayment</button>` : ''}
+          <button id="modalExportSchedule" data-id="${loan.id}" class="ghost">Export Schedule</button>
+          <button id="modalGeneratePDF" data-id="${loan.id}" class="ghost">Generate PDF</button>
+          <div style="flex:1"></div>
+          <button id="modalMarkRepaid" class="ghost"${loan.status!=='approved' ? ' disabled' : ''}>Mark as Repaid</button>
+        </div>
+
+        <div style="margin-top:8px">
+          <h4 style="margin:0 0 8px 0">Repayments</h4>
+          <div id="repayList" style="max-height:180px;overflow:auto;">
+            ${loan.repayments.length ? loan.repayments.map(r=>`<div class="small">ZMW ${fmt(r.amount)} — ${escapeHtml(r.method||'n/a')} <span style="color:#6d6d6d">(${r.date||''})</span></div>`).join('') : '<div class="tiny small">No repayments recorded</div>'}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <hr style="margin:12px 0;border:none;border-top:1px solid #eef7ec" />
+    <div>
+      <h4 style="margin:0 0 8px 0">Amortization Schedule</h4>
+      <div style="max-height:220px;overflow:auto">
+        <table style="width:100%;border-collapse:collapse">
+          <thead style="background:#f7fbf8"><tr><th>#</th><th>Due</th><th>Payment</th><th>Principal</th><th>Interest</th><th>Balance</th></tr></thead>
+          <tbody>
+            ${schedule.map(s => `<tr><td style="padding:6px">${s.installment}</td><td style="padding:6px">${s.dueDate}</td><td style="padding:6px">ZMW ${fmt(s.payment)}</td><td style="padding:6px">ZMW ${fmt(s.principalPaid)}</td><td style="padding:6px">ZMW ${fmt(s.interest)}</td><td style="padding:6px">ZMW ${fmt(s.balance)}</td></tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+function attachModalHandlers(loan){
+  const btnAdd = $('#modalAddRepayment');
+  if(btnAdd){
+    btnAdd.addEventListener('click', ()=> openRepaymentPrompt(loan, true));
+  }
+  const btnExport = $('#modalExportSchedule');
+  if(btnExport) btnExport.addEventListener('click', ()=> exportScheduleCSV(loan));
+  const btnGenPDF = $('#modalGeneratePDF');
+  if(btnGenPDF) btnGenPDF.addEventListener('click', ()=> generatePDF(loan));
+  const btnMark = $('#modalMarkRepaid');
+  if(btnMark) btnMark.addEventListener('click', ()=>{
+    if(confirm('Mark loan as fully repaid?')){ loan.status = 'repaid'; saveLoans(loans); renderTable(); modalBack.style.display='none'; alert('Loan marked as repaid'); }
+  });
+}
+
+// Repayment prompt
+function openRepaymentPrompt(loan, keepOpenAfter=false){
+  const amt = prompt('Enter repayment amount (ZMW):');
+  if(amt === null) return;
+  const num = Number(amt);
+  if(isNaN(num) || num<=0){ alert('Invalid amount'); return; }
+  const method = prompt('Payment method (cash / mobile / bank...)', 'cash') || 'cash';
+  const date = (new Date()).toISOString().slice(0,10);
+  loan.repayments.push({ id: uid('R'), amount: num, date, method });
+  // auto mark repaid if sum >= principal
+  const paid = loan.repayments.reduce((s,r)=>s + Number(r.amount),0);
+  if(paid >= loan.principal) loan.status = 'repaid';
+  saveLoans(loans);
+  renderTable();
+  if(!keepOpenAfter) alert('Repayment recorded');
+  if(modalBack.style.display === 'flex') {
+    modalContent.innerHTML = generateLoanDetailsHtml(loan);
+    attachModalHandlers(loan);
+  }
+}
+
+// CSV export of all loans
+exportCSVBtn.addEventListener('click', exportAllCSV);
+function exportAllCSV(){
+  if(loans.length === 0){ alert('No loans to export'); return; }
+  const headers = ['id','borrowerName','borrowerEmail','principal','interestRate','termMonths','frequency','status','createdAt','notes'];
+  const rows = loans.map(l => headers.map(h => `"${String(l[h]===undefined?'':l[h]).replace(/"/g,'""')}"`).join(','));
+  const csv = [headers.join(','), ...rows].join('\n');
+  downloadData(csv, 'chembe_loans_export.csv', 'text/csv');
+}
+
+// CSV import (file input)
+importCSVBtn.addEventListener('click', ()=> csvFileInput.click());
+csvFileInput.addEventListener('change', (e)=>{
+  const f = e.target.files[0];
+  if(!f) return;
+  Papa.parse(f, {
+    header: true,
+    skipEmptyLines: true,
+    complete: function(results){
+      const data = results.data;
+      const mapped = data.map(row => normalizeLoan({
+        borrowerName: row.borrowerName || row.name || 'Imported',
+        borrowerEmail: row.borrowerEmail || row.email || '',
+        principal: Number(row.principal || row.amount || 0),
+        interestRate: Number(row.interestRate || row.rate || 18),
+        termMonths: Number(row.termMonths || row.term || 12),
+        frequency: Number(row.frequency || 12),
+        notes: row.notes || '',
+        status: row.status || 'pending',
+        createdAt: new Date().toISOString(),
+      }));
+      loans = mapped.concat(loans);
+      saveLoans(loans);
+      renderTable();
+      alert(`${mapped.length} loans imported`);
+      csvFileInput.value = '';
+    },
+    error: (err) => alert('CSV import error: ' + err.message)
+  });
+});
+
+// Sample data import
+importSampleBtn.addEventListener('click', ()=>{
+  const sample = [
+    { borrowerName: 'Grace Mwale', borrowerEmail:'grace@example.com', principal:8000, interestRate:20, termMonths:12, frequency:12, notes:'Small business', status:'pending' },
+    { borrowerName: 'Joseph Banda', borrowerEmail:'joseph@example.com', principal:15000, interestRate:18, termMonths:24, frequency:12, notes:'Stock purchase', status:'approved', repayments:[{id:'r1', amount:2000, date: today(), method:'mobile'}] },
+    { borrowerName: 'Mercy Phiri', borrowerEmail:'mercy@example.com', principal:4000, interestRate:15, termMonths:6, frequency:12, notes:'Emergency', status:'denied' }
+  ];
+  loans = sample.map(normalizeLoan).concat(loans);
+  saveLoans(loans);
+  renderTable();
+  alert('Sample loans imported');
+});
+
+// Delete all data
+clearAllBtn.addEventListener('click', ()=>{
+  if(confirm('Clear ALL loan data from localStorage? This cannot be undone.')){
+    localStorage.removeItem(KEY);
+    loans = [];
+    renderTable();
+    alert('All data cleared');
+  }
+});
+
+// Download helper
+function downloadData(str, filename, mime){
+  const blob = new Blob([str], {type: mime || 'application/octet-stream'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; document.body.appendChild(a); a.click();
+  setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); }, 1000);
+}
+
+// Export schedule CSV
+function exportScheduleCSV(loan){
+  const schedule = amortizationSchedule(loan.principal, loan.interestRate, loan.termMonths, loan.frequency);
+  const headers = ['installment','dueDate','payment','principalPaid','interest','balance'];
+  const rows = schedule.map(s => headers.map(h => `"${(s[h]||'').toString().replace(/"/g,'""')}"`).join(','));
+  const csv = [headers.join(','), ...rows].join('\n');
+  downloadData(csv, `${loan.borrowerName.replace(/\s+/g,'_')}_schedule.csv`, 'text/csv');
+}
+
+// PDF generation using jsPDF
+function generatePDF(loan){
+  try{
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({unit:'pt', format:'a4'});
+    const left = 40; let y = 60;
+    doc.setFontSize(18); doc.setTextColor('#0a5c36'); doc.text('Chembe Media Investments', left, y);
+    y += 28;
+    doc.setFontSize(12); doc.setTextColor(20); doc.text('Loan Agreement (Sample)', left, y);
+    y += 20;
+    doc.setFontSize(11);
+    doc.text(`Date: ${new Date().toLocaleDateString()}`, left, y); y += 18;
+    doc.text(`Borrower: ${loan.borrowerName}`, left, y); y += 16;
+    if(loan.borrowerEmail){ doc.text(`Email: ${loan.borrowerEmail}`, left, y); y += 16; }
+    doc.text(`Principal (ZMW): ${fmt(loan.principal)}`, left, y); y += 16;
+    doc.text(`Interest (annual): ${loan.interestRate}%`, left, y); y += 16;
+    doc.text(`Term: ${loan.termMonths} months`, left, y); y += 16;
+    doc.text(`Payment frequency: ${loan.frequency===12?'Monthly':loan.frequency}`, left, y); y += 22;
+    doc.text('Sample Terms & Conditions:', left, y); y += 16;
+    const sample = [
+      '1. The borrower agrees to repay the principal and interest according to the amortization schedule.',
+      '2. Late payments may incur additional fees as agreed in the agreement.',
+      '3. This is a generated sample agreement for demonstration only.'
+    ];
+    doc.setFontSize(10);
+    sample.forEach(line => { doc.text(line, left+8, y); y+=14; });
+    y += 10;
+    doc.setFontSize(11);
+    doc.text('Signed by (Lender): ______________________', left, y); y += 40;
+    doc.text('Signed by (Borrower): ______________________', left, y);
+    doc.save(`${loan.borrowerName.replace(/\s+/g,'_')}_loan_agreement.pdf`);
+  }catch(e){
+    alert('PDF generation failed: ' + e.message);
+  }
+}
+
+// Repayment via prompt (already implemented) used in modal and table
+
+// Search, filter, sort listeners
+searchInput.addEventListener('input', renderTable);
+filterStatus.addEventListener('change', renderTable);
+sortBy.addEventListener('change', renderTable);
+
+// New loan quick button scrolls to form
+newLoanBtn.addEventListener('click', ()=> { window.scrollTo({top:0,behavior:'smooth'}); $('#borrowerName').focus(); });
+
+// Init: normalize existing loans then render
+loans = loans.map(normalizeLoan);
+saveLoans(loans);
+renderTable();
+
+// Helper: download sample CSV or other actions could be added here
+
+// Small UX: allow keyboard Enter on search to focus first result
+searchInput.addEventListener('keypress', (e)=>{ if(e.key === 'Enter'){ const first = loansTbody.querySelector('button[data-action="view"]'); if(first) first.click(); } });
+
+// Accessibility: ESC closes modal
+document.addEventListener('keydown', (e)=> { if(e.key === 'Escape' && modalBack.style.display === 'flex'){ modalBack.style.display = 'none'; } });
+
+</script>
+</body>
+</html>
